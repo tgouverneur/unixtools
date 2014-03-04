@@ -17,7 +17,7 @@ pc=${1}
 
 function ctrl_c() {
         echo "** Trap SIGINT, cleanup and exit";
-#       rm -rf ${TMP};
+	rm -rf ${TMP};
         exit 0;
 }
 trap ctrl_c INT
