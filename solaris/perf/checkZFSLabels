@@ -1,0 +1,63 @@
+#!/bin/bash
+##
+# Checks for ZFS disk label consistency
+#
+# Gouverneur Thomas - 2010
+##
+
+let x=0x`hostid`
+
+state=0
+name=
+hostname=`uname -n`
+hostid=$x
+
+
+for pool in `zpool list -H -o name `; do
+  echo "[-] Checks for $pool on-going...";
+  vdevs=`zpool status ${pool} | grep ONLINE | awk '$1 ~ /^c[0-9]t/ { print $1 }'`
+  name=${pool}
+  for vdev in ${vdevs}; do
+    echo "[-]  Found $vdev in $pool, checking its labels...";
+    for val in `zdb -l /dev/rdsk/${vdev}s0 | egrep "state|name|hostid|hostname" | sort -u`; do
+      n=`echo $val|cut -f1 -d'='|awk '{print $1}'`
+      v=`echo $val|cut -f 2 -d'='|tr \' ' '|awk '{print $1}'`;
+      case "$n" in
+        "name")
+          if [ "$name" = "$v" ]; then
+            echo "   -> name ok ($v)";
+          else
+            echo "   [!!!] WRONG NAME: $v instead of $name [!!!]";
+            sleep 5; # tobe sure we see error
+          fi
+	;;
+	"state")
+          if [ "$state" = "$v" ]; then
+            echo "   -> state ok ($v)";
+          else
+            echo "   [!!!] WRONG STATE: $v instead of $name [!!!]";
+            sleep 5; # tobe sure we see error
+	  fi
+	;;
+	"hostid")
+          if [ "$hostid" = "$v" ]; then
+            echo "   -> hostid ok ($v)";
+          else
+            echo "   [!!!] WRONG HOSTID: $v instead of $name [!!!]";
+            sleep 5; # tobe sure we see error
+	  fi
+	;;
+	"hostname")
+
+          if [ "$hostname" = "$v" ]; then
+            echo "   -> hostname ok ($v)";
+          else
+            echo "   [!!!] WRONG HOSTNAME: $v instead of $name [!!!]";
+            sleep 5; # tobe sure we see error
+	  fi
+	;;
+      esac;
+    done
+  done
+
+done;

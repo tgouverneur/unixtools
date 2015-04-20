@@ -1,0 +1,53 @@
+#!/bin/bash
+##
+# Gouverneur Thomas - 2011
+#
+# Try to detect fragmenting pools
+#
+# Please check http://wildcat.espix.org/txt/zfs-fragmentation.txt for details
+##
+
+if [ $# -ne 1 ]; then
+  echo "$0 <duration>";
+  exit;
+fi
+
+TMPDIR=/var/tmp
+DUR=$1;
+
+OUTLOCKSTAT=/var/tmp/lockstat.out.${RANDOM}
+OUTDTRACE=/var/tmp/dtrace.out.${RANDOM}
+ZIO_CB="zio_gang_tree_issue"
+
+echo "[-] Launching lockstat for ${DUR} seconds...";
+/usr/sbin/lockstat -CcwP -n 50000 -D 20 -s 40 /usr/bin/sleep ${DUR} > ${OUTLOCKSTAT};
+
+GLS=`grep -c "_gang_" ${OUTLOCKSTAT}`
+
+if [ ${GLS} -gt 1 ]; then
+  echo "[!] ${GLS} trace of ganging found inside lockstat";
+else
+  echo "[-] OK, no trace of ganging inside lockstat";
+fi
+
+echo "[-] Launching dtrace for ${DUR} seconds...";
+/usr/sbin/dtrace -q -n 'fbt::zio_gang_tree_issue:entry { @zio_gang_tree_issue[pid]=count(); }' -c "/usr/bin/sleep ${DUR}" > ${OUTDTRACE};
+
+echo "[-] Searching for ganging pools...";
+awk '{ if ($1 == "" || $1 == 0) continue; print $1,$2; }' ${OUTDTRACE} | while read pid cnt; do
+
+  pool=`ps -o comm -p ${pid}|grep "zpool"|tail -1`;
+  if [ -z "${pool}" ]; then
+    continue;
+  fi
+
+  echo "  > Pool ${pool} is ganging (${cnt})";
+
+done;
+
+echo -n "[-] Cleaning temp files...";
+rm -f ${OUTDTRACE}
+rm -f ${OUTLOCKSTAT}
+echo "done";
+
+
